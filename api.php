@@ -126,8 +126,21 @@ try {
             break;
 
         case 'add_proveedor':
-            $pdo->prepare("INSERT INTO proveedores (nombre, contacto, telefono) VALUES ($1, $2, $3)")
-                ->execute([$input['nombre'], $input['contacto'] ?? '', $input['telefono'] ?? '']);
+            // Debug: Registrar qué estamos recibiendo
+            error_log("add_proveedor input: " . json_encode($input));
+            
+            // Validar que los datos existan
+            if (empty($input['nombre'])) {
+                echo json_encode(['ok' => false, 'error' => 'El nombre es obligatorio']);
+                break;
+            }
+            
+            $stmt = $pdo->prepare("INSERT INTO proveedores (nombre, contacto, telefono) VALUES ($1, $2, $3)");
+            $stmt->execute([
+                $input['nombre'], 
+                $input['contacto'] ?? '', 
+                $input['telefono'] ?? ''
+            ]);
             echo json_encode(['ok' => true, 'csrf' => $_SESSION['csrf']]);
             break;
 

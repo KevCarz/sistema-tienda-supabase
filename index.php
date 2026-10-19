@@ -469,6 +469,10 @@ async function api(action, data = null) {
   }
 
   try {
+    const headers = { 
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': CSRF  // ← Asegúrate de que esta línea exista
+    };
     const res = await fetch('api.php?action=' + action, {
       method: data ? 'POST' : 'GET',
       credentials: 'same-origin',
@@ -731,25 +735,23 @@ function viewClientes() {
 }
 
 function viewProveedores() {
-  const list = DB.proveedores.map(p => 
-    '<li class="py-3"><div class="font-medium">' + esc(p.nombre) + '</div>' +
-    '<div class="text-xs text-slate-500">' + esc(p.contacto) + (p.telefono ? ' · ' + esc(p.telefono) : '') + '</div></li>').join('')
+  const list = DB.proveedores.map(p => `
+    <li class="py-3"><div class="font-medium">${esc(p.nombre)}</div>
+    <div class="text-xs text-slate-500">${esc(p.contacto)} ${p.telefono ? '· ' + esc(p.telefono) : ''}</div></li>`).join('')
     || '<li class="py-3 text-slate-400">Sin proveedores.</li>';
-  
-  openSheet('Directorio de Proveedores', 
-    '<details class="mb-3 bg-indigo-50 rounded-2xl p-3 border border-indigo-100" ' + (DB.proveedores.length ? '' : 'open') + '>' +
-      '<summary class="font-semibold text-indigo-700 cursor-pointer">＋ Nuevo proveedor</summary>' +
-      '<form id="f" class="mt-2">' +
-        label('Nombre') + '<input name="nombre" required class="' + inputCls + '">' +
-        label('Persona de contacto') + '<input name="contacto" class="' + inputCls + '">' +
-        label('Teléfono') + '<input name="telefono" type="tel" class="' + inputCls + '">' +
-        '<button type="submit" class="' + btnCls + ' bg-indigo-600 hover:bg-indigo-700 mt-4">Guardar proveedor</button>' +
-      '</form>' +
-    '</details>' +
-    '<ul class="divide-y divide-slate-100 pb-2">' + list + '</ul>');
+  openSheet('Proveedores', `
+    <details class="mb-3 bg-indigo-50 rounded-2xl p-3" ${DB.proveedores.length ? '' : 'open'}>
+      <summary class="font-semibold text-indigo-700 cursor-pointer">＋ Nuevo proveedor</summary>
+      <form id="f">
+        ${label('Nombre')}<input name="nombre" required class="${inputCls}">
+        ${label('Persona de contacto')}<input name="contacto" class="${inputCls}">
+        ${label('Teléfono')}<input name="telefono" type="tel" class="${inputCls}">
+        <button type="submit" class="${btnCls} bg-indigo-600 mt-4">Guardar proveedor</button>
+      </form>
+    </details>
+    <ul class="divide-y divide-slate-100 pb-2">${list}</ul>`);
   $('#f').onsubmit = e => { e.preventDefault(); submitForm(e.target, 'add_proveedor', viewProveedores); };
 }
-
 async function viewMovimientos() {
   openSheet('Historial de Movimientos', '<div class="py-10 text-center text-slate-400">Cargando…</div>');
   let rows, limite;
