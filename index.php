@@ -8,7 +8,7 @@ require_once __DIR__ . '/config.php';
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#4f46e5">
 <title><?php echo htmlspecialchars(APP_NAME); ?></title>
 <script>
@@ -200,7 +200,7 @@ if (darkModeEnabled) document.documentElement.classList.add('dark-mode');
     html.dark-mode .chip:not(.bg-indigo-600):hover { background-color: #29364a; }
   }
   @media (prefers-reduced-motion: reduce) {
-    html, body, .surface-card, .interactive-card { transition: none; }
+    html, body, .surface-card, .interactive-card, .sheet-enter { transition: none; animation: none; }
   }
 </style>
 </head>
@@ -297,8 +297,7 @@ if (darkModeEnabled) document.documentElement.classList.add('dark-mode');
           </table>
         </div>
       </section>
-          <!-- NUEVO: Reportes Gerenciales (Ocupa todo el ancho) -->
-    <section class="lg:col-span-8 space-y-6">
+      <div class="space-y-6">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         
         <!-- Top Productos -->
@@ -320,7 +319,7 @@ if (darkModeEnabled) document.documentElement.classList.add('dark-mode');
         </div>
 
       </div>
-    </section>
+      </div>
     </section>
 
     <aside class="lg:col-span-4 space-y-6">
@@ -357,10 +356,10 @@ if (darkModeEnabled) document.documentElement.classList.add('dark-mode');
 </main>
 
 <div id="overlay" class="hidden fixed inset-0 z-40 bg-black/50 flex items-center sm:items-center justify-center p-0 sm:p-4">
-  <div id="sheet" class="surface-card sheet-enter bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+  <div id="sheet" class="surface-card sheet-enter bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" tabindex="-1">
     <div class="flex items-center justify-between px-6 pt-5 pb-3 border-b border-slate-100">
       <h2 id="sheetTitle" class="text-lg font-bold text-slate-800"></h2>
-      <button id="btnClose" class="w-9 h-9 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold text-lg active:bg-slate-200 transition">✕</button>
+      <button id="btnClose" type="button" aria-label="Cerrar ventana" class="w-9 h-9 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold text-lg active:bg-slate-200 transition">✕</button>
     </div>
     <div id="sheetBody" class="px-6 py-4 pb-safe overflow-y-auto flex-1"></div>
   </div>
@@ -419,7 +418,9 @@ function saveQueue(queue) { localStorage.setItem('sync_queue', JSON.stringify(qu
 
 // Solo se eliminan de la cola los registros confirmados por la API, conservando el orden de envío.
 // Esta función se ejecuta automáticamente cuando vuelve el internet
+let isSyncingQueue = false;
 window.addEventListener('online', async () => {
+  if (isSyncingQueue) return;
   let queue;
   try {
     queue = getQueue();
@@ -430,6 +431,7 @@ window.addEventListener('online', async () => {
   }
   if (queue.length === 0) return;
   
+  isSyncingQueue = true;
   toast(`🌐 Conexión restaurada. Sincronizando ${queue.length} registro(s)...`, true);
   
   let successCount = 0;
@@ -446,11 +448,21 @@ window.addEventListener('online', async () => {
     }
   }
   
-  // Actualizamos la cola (quitamos los que se enviaron bien)
-  const newQueue = queue.slice(successCount);
-  saveQueue(newQueue);
+  // Conservar también los registros que se hayan agregado mientras la sincronización estaba en curso.
+  let queueSaved = false;
+  try {
+    saveQueue(getQueue().slice(successCount));
+    queueSaved = true;
+  } catch (error) {
+    toast(successCount > 0
+      ? 'Se sincronizaron datos, pero no se pudo actualizar la cola local.'
+      : 'No se pudo actualizar la cola local.', false);
+    console.error('No se pudo guardar la cola de sincronización.', error);
+  } finally {
+    isSyncingQueue = false;
+  }
   
-  if (successCount > 0) {
+  if (successCount > 0 && queueSaved) {
     toast(`✅ ${successCount} registro(s) sincronizado(s) con la base de datos`, true);
     api('state').catch(e => toast(e.message, false));
   }
@@ -520,19 +532,30 @@ async function submitForm(form, action, onOk) {
 
     // Enviar a la API (aquí JSON.stringify lo convierte en texto válido)
     await api(action, formData);
-    
-    toast('✅ Guardado exitosamente', true);
     form.reset(); 
-    if (onOk) onOk(); else closeSheet();
+    let refreshed = true;
+    try {
+      await api('state');
+    } catch (refreshError) {
+      refreshed = false;
+      console.error('El registro se guardó, pero no se pudo actualizar el panel.', refreshError);
+    }
+    if (refreshed && onOk) onOk(); else closeSheet();
+    toast(refreshed ? '✅ Guardado exitosamente' : 'Guardado, pero no se pudieron actualizar los datos.', refreshed);
     
   } catch (e) { 
     if (e.message === 'OFFLINE_QUEUE') {
-      const queue = getQueue();
-      queue.push({ action, data: Object.fromEntries(new FormData(form)) });
-      saveQueue(queue);
-      toast('💾 Sin internet. Guardado localmente (se sincronizará al reconectar)', true);
-      form.reset();
-      closeSheet();
+      try {
+        const queue = getQueue();
+        queue.push({ action, data: Object.fromEntries(new FormData(form)) });
+        saveQueue(queue);
+        toast('💾 Sin internet. Guardado localmente (se sincronizará al reconectar)', true);
+        form.reset();
+        closeSheet();
+      } catch (queueError) {
+        toast('No se pudo guardar sin conexión: ' + queueError.message, false);
+        console.error('No se pudo guardar en la cola local.', queueError);
+      }
     } else {
       toast(e.message, false);
     }
@@ -606,7 +629,7 @@ function renderSummary() {
   
   $('#chartSemana').innerHTML = semana.length ? semana.map(d => {
     const heightPercent = (parseFloat(d.total_dia) / maxVal) * 100;
-    const fechaCorta = d.dia ? d.dia.substring(5) : ''; 
+    const fechaCorta = d.dia ? esc(d.dia.substring(5)) : '';
     return `
       <div class="flex-1 flex flex-col items-center justify-end h-full group relative">
         <div class="absolute -top-8 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap z-10">
@@ -619,18 +642,65 @@ function renderSummary() {
 }
 
 function openSheet(title, html) {
+  if ($('#overlay').classList.contains('hidden')) {
+    sheetReturnFocus = document.activeElement;
+  }
   $('#sheetTitle').textContent = title;
   $('#sheetBody').innerHTML = html;
   $('#overlay').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
+  $('#sheet').focus();
 }
 function closeSheet() {
   $('#overlay').classList.add('hidden');
   document.body.style.overflow = '';
+  if (sheetReturnFocus instanceof HTMLElement && sheetReturnFocus.isConnected) {
+    sheetReturnFocus.focus();
+  }
 }
+let sheetReturnFocus = null;
 $('#btnClose').onclick = closeSheet;
 $('#overlay').addEventListener('click', e => { if (e.target.id === 'overlay') closeSheet(); });
-$('#btnRefresh').onclick = () => api('state').then(() => toast('Datos actualizados')).catch(e => toast(e.message, false));
+document.addEventListener('keydown', e => {
+  if ($('#overlay').classList.contains('hidden')) return;
+  if (e.key === 'Escape') {
+    closeSheet();
+    return;
+  }
+  if (e.key !== 'Tab') return;
+
+  const focusable = [...$('#sheet').querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter(element => element.offsetParent !== null);
+  if (focusable.length === 0) {
+    e.preventDefault();
+    $('#sheet').focus();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey && (document.activeElement === first || document.activeElement === $('#sheet'))) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+});
+$('#btnRefresh').onclick = async e => {
+  const button = e.currentTarget;
+  button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
+  try {
+    await api('state');
+    toast('Datos actualizados');
+  } catch (error) {
+    toast(error.message, false);
+  } finally {
+    button.disabled = false;
+    button.removeAttribute('aria-busy');
+  }
+};
 
 const label = t => '<label class="block text-sm font-medium text-slate-600 mb-1 mt-3">' + t + '</label>';
 const options = (rows, fn, ph) => '<option value="">' + ph + '</option>' + rows.map(fn).join('');
