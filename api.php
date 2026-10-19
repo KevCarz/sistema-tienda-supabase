@@ -17,9 +17,16 @@ if (empty($rawBody) && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $data = json_decode($rawBody, true);
 
-// Si el JSON es inválido, devolver error
+// Si el JSON es inválido, registrar el cuerpo exacto en los logs y devolver error
 if ($data === null && json_last_error() !== JSON_ERROR_NONE) {
-    echo json_encode(['ok' => false, 'error' => 'JSON inválido: ' . json_last_error_msg()]);
+    $errorMsg = json_last_error_msg();
+    // Esto escribirá el contenido exacto que está fallando en los logs de Render
+    error_log("=== ERROR JSON === Mensaje: " . $errorMsg . " | Cuerpo recibido: [" . $rawBody . "]");
+    
+    echo json_encode([
+        'ok' => false, 
+        'error' => "JSON inválido ($errorMsg). Revisa los logs del servidor para ver el dato corrupto."
+    ]);
     exit;
 }
 

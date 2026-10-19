@@ -476,15 +476,13 @@ async function api(action, data = null) {
       body: data ? JSON.stringify(data) : undefined,  // ← ESTA LÍNEA ES CRÍTICA
     });
 
-    if (!res.ok) {
+    const json = await res.json().catch(() => ({ ok: false, error: 'Respuesta inválida' }));
+    if (!res.ok || !json.ok) {
       if (res.status === 502 || res.status === 504) {
         throw new Error('⏳ El servidor está despertando. Intenta de nuevo en 10 segundos.');
       }
-      throw new Error('Error del servidor (Código: ' + res.status + ')');
+      throw new Error(json.error || 'Error del servidor (Código: ' + res.status + ')');
     }
-
-    const json = await res.json().catch(() => ({ ok: false, error: 'Respuesta inválida' }));
-    if (!json.ok) throw new Error(json.error || 'Error desconocido');
     
     CSRF = json.csrf || CSRF;
     if (json.resumen) { DB = json; renderSummary(); }
@@ -512,12 +510,15 @@ async function submitForm(form, action, onOk) {
   const oldText = btn.innerHTML;
   btn.innerHTML = '<span class="animate-pulse">Guardando...</span>';
   
-  try {
+    try {
+    // Convertir FormData a objeto plano (solo strings y números)
     const formData = Object.fromEntries(new FormData(form));
     
+    // Validaciones lógicas
     if (formData.cantidad && parseInt(formData.cantidad) <= 0) throw new Error('La cantidad debe ser mayor a 0.');
     if (formData.precio_venta && parseFloat(formData.precio_venta) < 0) throw new Error('El precio no puede ser negativo.');
 
+    // Enviar a la API (aquí JSON.stringify lo convierte en texto válido)
     await api(action, formData);
     
     toast('✅ Guardado exitosamente', true);
@@ -540,7 +541,8 @@ async function submitForm(form, action, onOk) {
     btn.innerHTML = oldText;
     form.dataset.submitting = 'false';  // ← Liberar el bloqueo
   }
-}// ── Resumen y Dashboard ────────────────────────────────────────────────
+}
+// ── Resumen y Dashboard ────────────────────────────────────────────────
 function renderSummary() {
   const r = DB.resumen; 
   if (!r) return; // Si no hay datos, no hacemos nada
