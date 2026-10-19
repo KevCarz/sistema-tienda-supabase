@@ -497,50 +497,50 @@ async function api(action, data = null) {
 
 // ── 3. Envío de Formularios (Con Cola Offline) ────────────────────────────────
 async function submitForm(form, action, onOk) {
-  if (!form.checkValidity()) { form.reportValidity(); return; }
+  // Bloquear doble envío
+  if (form.dataset.submitting === 'true') return;
+  form.dataset.submitting = 'true';
+  
+  if (!form.checkValidity()) { 
+    form.reportValidity(); 
+    form.dataset.submitting = 'false';
+    return; 
+  }
 
   const btn = form.querySelector('button[type=submit]');
   btn.disabled = true;
   const oldText = btn.innerHTML;
-  btn.innerHTML = '<span class="animate-pulse">Procesando...</span>';
+  btn.innerHTML = '<span class="animate-pulse">Guardando...</span>';
   
   try {
     const formData = Object.fromEntries(new FormData(form));
     
-    // Validaciones lógicas
     if (formData.cantidad && parseInt(formData.cantidad) <= 0) throw new Error('La cantidad debe ser mayor a 0.');
     if (formData.precio_venta && parseFloat(formData.precio_venta) < 0) throw new Error('El precio no puede ser negativo.');
 
     await api(action, formData);
     
-    toast('✅ Guardado exitosamente en la base de datos', true);
+    toast('✅ Guardado exitosamente', true);
     form.reset(); 
     if (onOk) onOk(); else closeSheet();
     
   } catch (e) { 
-    // AQUÍ ESTÁ LA MAGIA: Si el error es la señal OFFLINE_QUEUE, lo guardamos localmente
     if (e.message === 'OFFLINE_QUEUE') {
-      try {
-        const queue = getQueue();
-        queue.push({ action, data: Object.fromEntries(new FormData(form)) });
-        saveQueue(queue);
-
-        toast('💾 Sin internet. Guardado localmente (se sincronizará al reconectar)', true);
-        form.reset();
-        closeSheet();
-      } catch (queueError) {
-        toast('No se pudo guardar sin conexión: ' + queueError.message, false);
-        console.error('No se pudo guardar en la cola de sincronización.', queueError);
-      }
+      const queue = getQueue();
+      queue.push({ action, data: Object.fromEntries(new FormData(form)) });
+      saveQueue(queue);
+      toast('💾 Sin internet. Guardado localmente (se sincronizará al reconectar)', true);
+      form.reset();
+      closeSheet();
     } else {
-      toast(e.message, false); // Error normal (ej: validación de backend)
+      toast(e.message, false);
     }
   } finally {
     btn.disabled = false;
     btn.innerHTML = oldText;
+    form.dataset.submitting = 'false';  // ← Liberar el bloqueo
   }
-}
-// ── Resumen y Dashboard ────────────────────────────────────────────────
+}// ── Resumen y Dashboard ────────────────────────────────────────────────
 function renderSummary() {
   const r = DB.resumen; 
   if (!r) return; // Si no hay datos, no hacemos nada
