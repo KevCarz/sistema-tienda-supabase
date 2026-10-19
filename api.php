@@ -20,28 +20,43 @@ $action = $_GET['action'] ?? '';
 
 try {
     switch ($action) {
-        case 'state':
-            // PostgreSQL: usamos ::date para comparar solo la fecha
+                case 'state':
+            // 1. Ventas de hoy
             $stmt = $pdo->query("SELECT COUNT(*) as count, COALESCE(SUM(total), 0) as total FROM movimientos WHERE tipo = 'venta' AND fecha_hora::date = CURRENT_DATE");
             $ventasHoy = $stmt->fetch();
             
+            // 2. Compras de hoy (NUEVO: necesario para calcular el balance del día)
+            $stmt = $pdo->query("SELECT COUNT(*) as count, COALESCE(SUM(total), 0) as total FROM movimientos WHERE tipo = 'compra' AND fecha_hora::date = CURRENT_DATE");
+            $comprasHoy = $stmt->fetch();
+            
+            // 3. Stock bajo
             $stmt = $pdo->prepare("SELECT id, nombre, stock_actual FROM productos WHERE stock_actual <= $1 ORDER BY stock_actual ASC");
             $stmt->execute([LIMITE_STOCK]);
             $stockBajo = $stmt->fetchAll();
             
+            // 4. Últimas transacciones
             $stmt = $pdo->query("SELECT m.tipo, m.cantidad, m.total, m.fecha_hora, p.nombre as producto FROM movimientos m JOIN productos p ON m.producto_id = p.id ORDER BY m.fecha_hora DESC LIMIT 5");
             $ultimas = $stmt->fetchAll();
             
+            // 5. Reportes Gerenciales (Vistas SQL creadas anteriormente)
+            $topProductos = $pdo->query("SELECT * FROM vista_top_productos")->fetchAll();
+            $ventasSemana = $pdo->query("SELECT * FROM vista_ventas_semana")->fetchAll();
+            
+            // 6. Respuesta JSON al frontend
             echo json_encode([
                 'ok' => true, 
                 'csrf' => $_SESSION['csrf'],
                 'resumen' => [
                     'ventas_hoy_count' => (int)$ventasHoy['count'],
                     'ventas_hoy_total' => (float)$ventasHoy['total'],
+                    'compras_hoy_count' => (int)$comprasHoy['count'],   // ← AGREGADO
+                    'compras_hoy_total' => (float)$comprasHoy['total'], // ← AGREGADO
                     'stock_bajo' => $stockBajo,
                     'ultimas' => $ultimas,
                     'limite_stock' => LIMITE_STOCK
                 ],
+                'top_productos' => $topProductos,
+                'ventas_semana' => $ventasSemana,
                 'clientes' => $pdo->query("SELECT id, nombre FROM clientes ORDER BY nombre")->fetchAll(),
                 'proveedores' => $pdo->query("SELECT id, nombre FROM proveedores ORDER BY nombre")->fetchAll(),
                 'productos' => $pdo->query("SELECT id, nombre, descripcion, precio_venta, costo_compra, stock_actual FROM productos ORDER BY nombre")->fetchAll()

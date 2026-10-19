@@ -8,10 +8,10 @@ define('LIMITE_STOCK', 5);
 
 // Leer credenciales desde variables de entorno (Render) o usar valores por defecto (local)
 $db_host = getenv('DB_HOST') ?: 'aws-1-us-west-2.pooler.supabase.com';
-$db_port = getenv('DB_PORT') ?: '6543';
+$db_port = getenv('DB_PORT') ?: '5432';
 $db_name = getenv('DB_NAME') ?: 'postgres';
-$db_user = getenv('DB_USER') ?: 'postgres';
-$db_pass = getenv('DB_PASS') ?: 'TuContraseñaSegura';
+$db_user = getenv('DB_USER') ?: 'postgres.kiodhnyvbbawjpiljykw';
+$db_pass = getenv('DB_PASS') ?: '44.MBH@@PGzac2K';
 
 try {
     $dsn = "pgsql:host=$db_host;port=$db_port;dbname=$db_name;";
