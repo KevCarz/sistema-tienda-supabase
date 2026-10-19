@@ -458,29 +458,30 @@ window.addEventListener('online', async () => {
 
 // ── 2. Llamadas al backend (Con manejo Offline) ───────────────────────────────
 async function api(action, data = null) {
-  // Si NO hay internet y es una petición GET (leer datos), lanzamos error normal
-  if (!navigator.onLine && !data) {
-    throw new Error('⚠️ Sin conexión. No se pueden cargar datos nuevos.');
-  }
-
-  // Si NO hay internet y es POST (guardar datos), lanzamos una señal especial para encolar
-  if (!navigator.onLine && data) {
-    throw new Error('OFFLINE_QUEUE'); 
+  if (!navigator.onLine) {
+    if (data) throw new Error('OFFLINE_QUEUE');
+    throw new Error('⚠️ Sin conexión a internet.');
   }
 
   try {
     const headers = { 
       'Content-Type': 'application/json',
-      'X-CSRF-Token': CSRF  // ← Asegúrate de que esta línea exista
+      'X-CSRF-Token': CSRF
     };
+    
     const res = await fetch('api.php?action=' + action, {
       method: data ? 'POST' : 'GET',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
-      body: data ? JSON.stringify(data) : undefined,
+      headers: headers,
+      body: data ? JSON.stringify(data) : undefined,  // ← ESTA LÍNEA ES CRÍTICA
     });
 
-    if (!res.ok) throw new Error('Error del servidor (Código: ' + res.status + ')');
+    if (!res.ok) {
+      if (res.status === 502 || res.status === 504) {
+        throw new Error('⏳ El servidor está despertando. Intenta de nuevo en 10 segundos.');
+      }
+      throw new Error('Error del servidor (Código: ' + res.status + ')');
+    }
 
     const json = await res.json().catch(() => ({ ok: false, error: 'Respuesta inválida' }));
     if (!json.ok) throw new Error(json.error || 'Error desconocido');
@@ -489,7 +490,7 @@ async function api(action, data = null) {
     if (json.resumen) { DB = json; renderSummary(); }
     return json;
   } catch (e) {
-    if (e.message === 'Failed to fetch') throw new Error('⚠️ No se pudo conectar con el servidor.');
+    if (e.message === 'Failed to fetch') throw new Error('⚠️ No se pudo conectar.');
     throw e;
   }
 }

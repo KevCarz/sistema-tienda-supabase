@@ -119,19 +119,23 @@ try {
             echo json_encode(['ok' => true, 'csrf' => $_SESSION['csrf']]);
             break;
 
-        case 'add_cliente':
-            $pdo->prepare("INSERT INTO clientes (nombre, telefono, email) VALUES ($1, $2, $3)")
-                ->execute([$input['nombre'], $input['telefono'] ?? '', $input['email'] ?? '']);
-            echo json_encode(['ok' => true, 'csrf' => $_SESSION['csrf']]);
-            break;
-
         case 'add_proveedor':
-            // Debug: Registrar qué estamos recibiendo
-            error_log("add_proveedor input: " . json_encode($input));
+            // DEBUG COMPLETO: Ver qué está llegando
+            $rawInput = file_get_contents('php://input');
+            error_log("RAW INPUT: " . $rawInput);
+            
+            $decodedInput = json_decode($rawInput, true);
+            error_log("DECODED INPUT: " . json_encode($decodedInput));
+            
+            $input = $decodedInput ?: [];
+            error_log("FINAL INPUT: " . json_encode($input));
             
             // Validar que los datos existan
             if (empty($input['nombre'])) {
-                echo json_encode(['ok' => false, 'error' => 'El nombre es obligatorio']);
+                echo json_encode([
+                    'ok' => false, 
+                    'error' => 'El nombre es obligatorio. Datos recibidos: ' . json_encode($input)
+                ]);
                 break;
             }
             
@@ -143,7 +147,6 @@ try {
             ]);
             echo json_encode(['ok' => true, 'csrf' => $_SESSION['csrf']]);
             break;
-
         case 'movimientos':
             $stmt = $pdo->query("SELECT m.tipo, m.cantidad, m.valor_unitario, m.total, m.fecha_hora, p.nombre as producto, c.nombre as cliente, pr.nombre as proveedor 
                                  FROM movimientos m 
