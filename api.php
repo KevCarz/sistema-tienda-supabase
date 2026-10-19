@@ -9,8 +9,8 @@ header('Content-Type: application/json; charset=utf-8');
 // ═══════════════════════════════════════════════════════════════
 $rawBody = file_get_contents('php://input');
 
-// Si el body está vacío, devolver error inmediatamente
-if (empty($rawBody)) {
+// Si el body está vacío Y es una petición POST, devolver error
+if (empty($rawBody) && $_SERVER['REQUEST_METHOD'] === 'POST') {
     echo json_encode(['ok' => false, 'error' => 'No se recibieron datos en el body']);
     exit;
 }
