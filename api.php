@@ -254,22 +254,80 @@ try {
             respond(['ok' => true, 'csrf' => $_SESSION['csrf']]);
             break;
 
-        case 'movimientos':
-            $stmt = $pdo->query(
-                'SELECT m.tipo, m.cantidad, m.valor_unitario, m.total, m.fecha_hora, p.nombre AS producto, c.nombre AS cliente, pr.nombre AS proveedor
-                 FROM movimientos m
-                 JOIN productos p ON m.producto_id = p.id
-                 LEFT JOIN clientes c ON m.cliente_id = c.id
-                 LEFT JOIN proveedores pr ON m.proveedor_id = pr.id
-                 ORDER BY m.fecha_hora DESC
-                 LIMIT 120'
-            );
-            respond(['ok' => true, 'movimientos' => $stmt->fetchAll(), 'limite' => 120]);
-            break;
+                case 'movimientos':
+            // ── Parámetros de filtro (todos opcionales) ──
+            $search = isset($_GET['search']) ? trim((string)$_GET['search']) : '';
+            $tipo = isset($_GET['tipo']) ? trim((string)$_GET['tipo']) : '';
+            $fechaInicio = isset($_GET['fecha_inicio']) ? trim((string)$_GET['fecha_inicio']) : '';
+            $fechaFin = isset($_GET['fecha_fin']) ? trim((string)$_GET['fecha_fin']) : '';
+            $limite = isset($_GET['limite']) ? filter_var($_GET['limite'], FILTER_VALIDATE_INT) : 120;
+            
+            // Validar límite (máximo 500 para no saturar)
+            if ($limite === false || $limite < 1 || $limite > 500) {
+                $limite = 120;
+            }
 
-        default:
-            respond(['ok' => false, 'error' => 'Acción no válida.'], 404);
-    }
+            // ─ Construcción dinámica de la consulta ─
+            $sql = 'SELECT m.id, m.tipo, m.cantidad, m.valor_unitario, m.total, m.fecha_hora, 
+                           p.nombre AS producto, c.nombre AS cliente, pr.nombre AS proveedor
+                    FROM movimientos m
+                    JOIN productos p ON m.producto_id = p.id
+                    LEFT JOIN clientes c ON m.cliente_id = c.id
+                    LEFT JOIN proveedores pr ON m.proveedor_id = pr.id
+                    WHERE 1=1';
+            
+            $params = [];
+            $paramIndex = 1;
+
+            // Filtro por tipo (venta o compra)
+            if ($tipo !== '' && in_array($tipo, ['venta', 'compra'], true)) {
+                $sql .= " AND m.tipo = ?";
+                $params[] = $tipo;
+            }
+
+            // Filtro por rango de fechas
+            if ($fechaInicio !== '') {
+                $sql .= " AND m.fecha_hora::date >= ?";
+                $params[] = $fechaInicio;
+            }
+            if ($fechaFin !== '') {
+                $sql .= " AND m.fecha_hora::date <= ?";
+                $params[] = $fechaFin;
+            }
+
+            // Filtro por texto (busca en producto, cliente o proveedor)
+            if ($search !== '') {
+                $sql .= " AND (LOWER(p.nombre) LIKE ? OR LOWER(c.nombre) LIKE ? OR LOWER(pr.nombre) LIKE ?)";
+                $searchLower = '%' . strtolower($search) . '%';
+                $params[] = $searchLower;
+                $params[] = $searchLower;
+                $params[] = $searchLower;
+            }
+
+            // Ordenamiento y límite
+            $sql .= " ORDER BY m.fecha_hora DESC LIMIT ?";
+            $params[] = $limite;
+
+            // ─ Ejecución segura con prepared statement ──
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $movimientos = $stmt->fetchAll();
+
+            // ── Respuesta incluyendo los filtros aplicados ─
+            respond([
+                'ok' => true,
+                'movimientos' => $movimientos,
+                'filtros_aplicados' => [
+                    'search' => $search,
+                    'tipo' => $tipo,
+                    'fecha_inicio' => $fechaInicio,
+                    'fecha_fin' => $fechaFin,
+                    'limite' => $limite
+                ],
+                'total_resultados' => count($movimientos)
+            ]);
+            break;
+    }         
 } catch (InvalidArgumentException | DomainException $error) {
     respond(['ok' => false, 'error' => $error->getMessage()], 422);
 } catch (Throwable $error) {
