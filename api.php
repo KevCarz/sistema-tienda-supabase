@@ -76,6 +76,12 @@ if (!is_string($action) || $action === '') {
     exit;
 }
 
+// Evita responder con HTTP 200 y un cuerpo vacío ante acciones no implementadas.
+if (!in_array($action, array_merge($writeActions, $readActions), true)) {
+    respond(['ok' => false, 'error' => 'Debes indicar una acción válida.'], 400);
+    exit;
+}
+
 if (!in_array($method, ['GET', 'POST'], true)
     || (in_array($action, $writeActions, true) && $method !== 'POST')
     || (in_array($action, $readActions, true) && $method !== 'GET')) {
@@ -254,12 +260,37 @@ try {
             respond(['ok' => true, 'csrf' => $_SESSION['csrf']]);
             break;
 
-                case 'movimientos':
+        case 'movimientos':
             // ── Parámetros de filtro (todos opcionales) ──
-            $search = isset($_GET['search']) ? trim((string)$_GET['search']) : '';
-            $tipo = isset($_GET['tipo']) ? trim((string)$_GET['tipo']) : '';
-            $fechaInicio = isset($_GET['fecha_inicio']) ? trim((string)$_GET['fecha_inicio']) : '';
-            $fechaFin = isset($_GET['fecha_fin']) ? trim((string)$_GET['fecha_fin']) : '';
+            foreach (['search', 'tipo', 'fecha_inicio', 'fecha_fin'] as $filter) {
+                if (isset($_GET[$filter]) && !is_string($_GET[$filter])) {
+                    throw new InvalidArgumentException('Los filtros de búsqueda deben ser texto.');
+                }
+            }
+
+            $search = trim($_GET['search'] ?? '');
+            $tipo = trim($_GET['tipo'] ?? '');
+            $fechaInicio = trim($_GET['fecha_inicio'] ?? '');
+            $fechaFin = trim($_GET['fecha_fin'] ?? '');
+
+            if ($tipo !== '' && !in_array($tipo, ['venta', 'compra'], true)) {
+                throw new InvalidArgumentException('El tipo debe ser venta o compra.');
+            }
+
+            foreach ([$fechaInicio, $fechaFin] as $dateValue) {
+                if ($dateValue === '') {
+                    continue;
+                }
+
+                $date = DateTimeImmutable::createFromFormat('!Y-m-d', $dateValue);
+                if (!$date || $date->format('Y-m-d') !== $dateValue) {
+                    throw new InvalidArgumentException('Las fechas deben tener el formato AAAA-MM-DD.');
+                }
+            }
+            if ($fechaInicio !== '' && $fechaFin !== '' && $fechaInicio > $fechaFin) {
+                throw new InvalidArgumentException('La fecha inicial no puede ser posterior a la fecha final.');
+            }
+
             $limite = isset($_GET['limite']) ? filter_var($_GET['limite'], FILTER_VALIDATE_INT) : 120;
             
             // Validar límite (máximo 500 para no saturar)
@@ -280,7 +311,7 @@ try {
             $paramIndex = 1;
 
             // Filtro por tipo (venta o compra)
-            if ($tipo !== '' && in_array($tipo, ['venta', 'compra'], true)) {
+            if ($tipo !== '') {
                 $sql .= " AND m.tipo = ?";
                 $params[] = $tipo;
             }
@@ -327,7 +358,7 @@ try {
                 'total_resultados' => count($movimientos)
             ]);
             break;
-    }         
+    }
 } catch (InvalidArgumentException | DomainException $error) {
     respond(['ok' => false, 'error' => $error->getMessage()], 422);
 } catch (Throwable $error) {
