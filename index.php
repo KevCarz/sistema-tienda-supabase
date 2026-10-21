@@ -1003,6 +1003,31 @@ window.addEventListener('offline', updateConnectionStatus);
 
 // Ejecutar al cargar la página por primera vez
 updateConnectionStatus();
+
+// ── INICIALIZACIÓN DE LA APP ────────────────────────────────────────────────
+
+// 1. Mapeo de vistas a funciones
+const VIEWS = { 
+  venta: viewVenta, 
+  compra: viewCompra, 
+  productos: viewProductos, 
+  clientes: viewClientes, 
+  proveedores: viewProveedores, 
+  movimientos: viewMovimientos 
+};
+
+// 2. Asignar eventos a todos los botones con data-open
+document.querySelectorAll('[data-open]').forEach(b => {
+  b.onclick = () => {
+    if (VIEWS[b.dataset.open]) {
+      VIEWS[b.dataset.open]();
+    }
+  };
+});
+
+// 3. Cargar el estado inicial del dashboard al abrir la página
+api('state').catch(e => toast(e.message, false));
+
 </script>
 </body>
 </html>
