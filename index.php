@@ -476,8 +476,8 @@ async function api(action, data = null, params = {}) {
   }
 
   try {
-    // Construir URL con parámetros GET si existen
     let url = 'api.php?action=' + action;
+    // Agregar parámetros GET si existen
     if (Object.keys(params).length > 0) {
       const queryString = new URLSearchParams(params).toString();
       url += '&' + queryString;
@@ -494,6 +494,7 @@ async function api(action, data = null, params = {}) {
       headers: headers,
       body: data ? JSON.stringify(data) : undefined,
     });
+    // ... 
 
     const json = await res.json().catch(() => ({ ok: false, error: 'Respuesta inválida' }));
     if (!res.ok) {
@@ -849,125 +850,140 @@ function debounce(func, wait) {
   };
 }
 
+// ── Vista de Movimientos con Filtros Dinámicos (Versión Segura) ──
 async function viewMovimientos() {
-  // HTML inicial con filtros
-  const filtrosHTML = `
-    <div class="bg-slate-50 p-3 rounded-xl mb-4 space-y-3 border border-slate-200">
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div>
-          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Buscar (Producto/Cliente/Proveedor)</label>
-          <input type="text" id="filtroSearch" placeholder="Ej: Coca Cola..." class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
-        </div>
-        <div>
-          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipo de Movimiento</label>
-          <select id="filtroTipo" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
-            <option value="">Todos</option>
-            <option value="venta">Solo Ventas</option>
-            <option value="compra">Solo Compras</option>
-          </select>
-        </div>
-      </div>
-      <div class="grid grid-cols-2 gap-2">
-        <div>
-          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Desde</label>
-          <input type="date" id="filtroInicio" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
-        </div>
-        <div>
-          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Hasta</label>
-          <input type="date" id="filtroFin" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
-        </div>
-      </div>
-    </div>
-    <div id="movResumen" class="grid grid-cols-2 gap-3 mb-4"></div>
-    <div id="movCount" class="text-xs text-slate-400 mb-2"></div>
-    <div class="overflow-x-auto rounded-2xl border border-slate-200">
-      <table class="w-full min-w-[620px] text-left text-xs">
-        <thead class="bg-slate-100 text-slate-500 uppercase tracking-wider">
-          <tr>
-            <th class="px-3 py-3 font-semibold">Hora</th>
-            <th class="px-3 py-3 font-semibold">Tipo</th>
-            <th class="px-4 py-3 font-semibold">Detalle</th>
-            <th class="px-3 py-3 font-semibold">Total</th>
-          </tr>
-        </thead>
-        <tbody id="movBody" class="divide-y divide-slate-100 text-sm"></tbody>
-      </table>
-    </div>
-  `;
+  // 1. Mostrar carga inicial
+  openSheet('Historial de Movimientos', '<div class="py-10 text-center text-slate-400">Cargando…</div>');
+  
+  // Variables de estado de los filtros
+  let filtroTipo = 'todos';
+  let filtroSearch = '';
+  let filtroInicio = '';
+  let filtroFin = '';
 
-  openSheet('Historial de Movimientos', filtrosHTML);
+  // Helper seguro para obtener elementos (evita errores de null)
+  const $ = (id) => document.getElementById(id);
 
-  // Función para cargar movimientos con filtros
-  const cargarMovimientos = debounce(async () => {
-    const search = document.getElementById('filtroSearch').value;
-    const tipo = document.getElementById('filtroTipo').value;
-    const fechaInicio = document.getElementById('filtroInicio').value;
-    const fechaFin = document.getElementById('filtroFin').value;
+  const chip = (id, txt) => '<button data-f="' + id + '" class="chip px-4 py-2 rounded-full text-sm font-medium border transition cursor-pointer">' + txt + '</button>';
 
+  const item = m => {
+    const venta = m.tipo === 'venta';
+    const quien = venta
+      ? '👤 ' + esc(m.cliente || 'Público General') + (m.proveedor ? ' · 🚚 ' + esc(m.proveedor) : '')
+      : '🚚 ' + esc(m.proveedor || 'Sin proveedor');
+    return '<tr class="hover:bg-slate-50/50">' +
+        '<td class="px-3 py-3 whitespace-nowrap text-slate-500 text-xs">' + esc(m.fecha_hora) + '</td>' +
+        '<td class="px-3 py-3 whitespace-nowrap">' +
+          '<span class="font-semibold ' + (venta ? 'text-emerald-600' : 'text-amber-600') + '">' + (venta ? 'Venta' : 'Compra') + '</span>' +
+          '<div class="text-xs text-slate-500">' + esc(m.producto) + ' × ' + m.cantidad + '</div>' +
+        '</td>' +
+        '<td class="px-3 py-3 text-slate-700 text-xs">' + quien + '</td>' +
+        '<td class="px-3 py-3 whitespace-nowrap font-bold ' + (venta ? 'text-emerald-600' : 'text-amber-600') + '">' + (venta ? '+' : '−') + money(m.total) + '</td>' +
+        '<td class="px-3 py-3"><span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700 font-medium">Registrado</span></td>' +
+      '</tr>';
+  };
+
+  // Función que llama al backend con los filtros y dibuja la tabla
+  const draw = async () => {
+    if ($('movBody')) $('movBody').innerHTML = '<tr><td colspan="5" class="px-3 py-10 text-center text-slate-400">Cargando...</td></tr>';
+    
     try {
-      const r = await api('movimientos', null, { 
-        search, tipo, fecha_inicio: fechaInicio, fecha_fin: fechaFin, limite: 120 
+      // Llamamos a la API con los parámetros GET (Lunes 21/10: Filtros dinámicos)
+      const r = await api('movimientos', null, {
+        search: filtroSearch,
+        tipo: filtroTipo === 'todos' ? '' : filtroTipo,
+        fecha_inicio: filtroInicio,
+        fecha_fin: filtroFin,
+        limite: 120
       });
       
-      const rows = r.movimientos || [];
-      const totalResultados = r.total_resultados || 0;
-
-      // Calcular totales
-      // PDO puede entregar los importes como cadenas; convertirlos evita concatenarlos al sumar.
-      const sumarTotales = movimientos => movimientos.reduce((suma, movimiento) => {
-        const total = Number(movimiento.total);
-        return suma + (Number.isFinite(total) ? total : 0);
-      }, 0);
-      const sumaVentas = sumarTotales(rows.filter(m => m.tipo === 'venta'));
-      const sumaCompras = sumarTotales(rows.filter(m => m.tipo === 'compra'));
-
-      // Actualizar resumen
-      document.getElementById('movResumen').innerHTML = `
-        <div class="bg-emerald-50 rounded-2xl p-4 border border-emerald-100">
-          <div class="text-xs text-slate-500 font-medium">Total Ventas</div>
-          <b class="text-xl text-emerald-600">${money(sumaVentas)}</b>
-        </div>
-        <div class="bg-amber-50 rounded-2xl p-4 border border-amber-100">
-          <div class="text-xs text-slate-500 font-medium">Total Compras</div>
-          <b class="text-xl text-amber-600">${money(sumaCompras)}</b>
-        </div>
-      `;
-
-      // Renderizar tabla
-      const item = m => {
-        const venta = m.tipo === 'venta';
-        const quien = venta 
-          ? (m.cliente ? '👤 ' + esc(m.cliente) : '')
-          : (m.proveedor ? '🚚 ' + esc(m.proveedor) : '');
-        return '<tr class="hover:bg-slate-50/50">' +
-            '<td class="px-3 py-3 whitespace-nowrap text-slate-500 text-xs">' + esc(m.fecha_hora) + '</td>' +
-            '<td class="px-3 py-3 whitespace-nowrap">' +
-              '<span class="font-semibold ' + (venta ? 'text-emerald-600' : 'text-amber-600') + '">' + (venta ? 'Venta' : 'Compra') + '</span>' +
-              '<div class="text-xs text-slate-500">' + esc(m.producto) + ' × ' + m.cantidad + '</div>' +
-            '</td>' +
-            '<td class="px-3 py-3 text-slate-700 text-xs">' + quien + '</td>' +
-            '<td class="px-3 py-3 whitespace-nowrap font-bold ' + (venta ? 'text-emerald-600' : 'text-amber-600') + '">' + (venta ? '+' : '−') + money(m.total) + '</td>' +
-          '</tr>';
-      };
-
-      document.getElementById('movBody').innerHTML = rows.length
-        ? rows.map(item).join('')
-        : '<tr><td colspan="4" class="px-3 py-10 text-center text-slate-400">No se encontraron movimientos con estos filtros.</td></tr>';
+      const datos = r.movimientos || [];
       
-      document.getElementById('movCount').textContent = `Mostrando ${totalResultados} resultado(s) (máx. 120, los más recientes)`;
+      // Actualizar estilo de los chips
+      document.querySelectorAll('#movChips .chip').forEach(b => {
+        const on = b.dataset.f === filtroTipo;
+        b.className = 'chip px-4 py-2 rounded-full text-sm font-medium border transition cursor-pointer ' +
+          (on ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50');
+      });
+
+      // Calcular sumas de lo que se muestra
+      const suma = t => datos.filter(m => m.tipo === t).reduce((a, m) => a + m.total, 0);
+
+      if ($('movResumen')) {
+        $('movResumen').innerHTML = 
+          '<div class="bg-emerald-50 rounded-2xl p-4 border border-emerald-100"><div class="text-xs text-slate-500 font-medium">Total Ventas</div><b class="text-xl text-emerald-600">' + money(suma('venta')) + '</b></div>' +
+          '<div class="bg-amber-50 rounded-2xl p-4 border border-amber-100"><div class="text-xs text-slate-500 font-medium">Total Compras</div><b class="text-xl text-amber-600">' + money(suma('compra')) + '</b></div>';
+      }
+
+      if ($('movBody')) {
+        $('movBody').innerHTML = datos.length
+          ? datos.map(item).join('')
+          : '<tr><td colspan="5" class="px-3 py-10 text-center text-slate-400">No hay movimientos con estos filtros.</td></tr>';
+      }
+      
+      if ($('movCount')) {
+        $('movCount').textContent = 'Mostrando ' + datos.length + ' resultado(s)';
+      }
+
     } catch (e) {
-      toast(e.message, false);
+      if ($('movBody')) $('movBody').innerHTML = '<tr><td colspan="5" class="px-3 py-10 text-center text-red-400">Error: ' + esc(e.message) + '</td></tr>';
     }
-  }, 300); // Debounce de 300ms para la búsqueda
+  };
 
-  // Carga inicial
-  cargarMovimientos();
+  // 2. HTML del Sheet con los NUEVOS filtros integrados
+  const htmlContent = 
+    '<div class="bg-slate-50 p-3 rounded-xl mb-4 space-y-3 border border-slate-200">' +
+      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">' +
+        '<div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Buscar (Producto/Cliente)</label>' +
+        '<input type="text" id="inputSearch" placeholder="Ej: Coca..." class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"></div>' +
+        '<div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipo</label>' +
+        '<select id="selectTipo" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"><option value="todos">Todos</option><option value="venta">Solo Ventas</option><option value="compra">Solo Compras</option></select></div>' +
+      '</div>' +
+      '<div class="grid grid-cols-2 gap-2">' +
+        '<div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Desde</label><input type="date" id="inputInicio" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"></div>' +
+        '<div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Hasta</label><input type="date" id="inputFin" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"></div>' +
+      '</div>' +
+    '</div>' +
+    '<div id="movResumen" class="grid grid-cols-2 gap-3 mb-4"></div>' +
+    '<div id="movChips" class="flex gap-2 mb-3">' + chip('todos', 'Todos') + chip('venta', '💰 Ventas') + chip('compra', '🛒 Compras') + '</div>' +
+    '<div id="movCount" class="text-xs text-slate-400 mb-2"></div>' +
+    '<div class="overflow-x-auto rounded-2xl border border-slate-200">' +
+      '<table class="w-full min-w-[620px] text-left text-xs">' +
+        '<thead class="bg-slate-100 text-slate-500 uppercase tracking-wider">' +
+          '<tr><th class="px-3 py-3 font-semibold">Hora</th><th class="px-3 py-3 font-semibold">Tipo</th><th class="px-4 py-3 font-semibold">Cliente/Proveedor</th><th class="px-3 py-3 font-semibold">Total</th><th class="px-3 py-3 font-semibold">Estado</th></tr>' +
+        '</thead>' +
+        '<tbody id="movBody" class="divide-y divide-slate-100 text-sm"></tbody>' +
+      '</table>' +
+    '</div>';
 
-  // Eventos de los filtros
-  document.getElementById('filtroSearch').addEventListener('input', cargarMovimientos);
-  document.getElementById('filtroTipo').addEventListener('change', cargarMovimientos);
-  document.getElementById('filtroInicio').addEventListener('change', cargarMovimientos);
-  document.getElementById('filtroFin').addEventListener('change', cargarMovimientos);
+  // 3. Renderizar el sheet
+  openSheet('Historial de Movimientos', htmlContent);
+
+  // 4. Asignar eventos de forma SEGURA (verificando que los elementos existen antes de agregar el listener)
+  const applyFilters = debounce(() => {
+    filtroSearch = $('inputSearch') ? $('inputSearch').value : '';
+    filtroTipo = $('selectTipo') ? $('selectTipo').value : 'todos';
+    filtroInicio = $('inputInicio') ? $('inputInicio').value : '';
+    filtroFin = $('inputFin') ? $('inputFin').value : '';
+    draw();
+  }, 400); // Espera 400ms después de dejar de escribir para no saturar
+
+  if ($('inputSearch')) $('inputSearch').addEventListener('input', applyFilters);
+  if ($('selectTipo')) $('selectTipo').addEventListener('change', applyFilters);
+  if ($('inputInicio')) $('inputInicio').addEventListener('change', applyFilters);
+  if ($('inputFin')) $('inputFin').addEventListener('change', applyFilters);
+
+  // Eventos de los chips (y sincronizar con el select)
+  document.querySelectorAll('#movChips .chip').forEach(b => {
+    b.onclick = () => { 
+      filtroTipo = b.dataset.f; 
+      if ($('selectTipo')) $('selectTipo').value = filtroTipo;
+      applyFilters(); 
+    };
+  });
+
+  // 5. Carga inicial de datos
+  draw();
 }
 // ── Indicador de Estado de Conexión (UX) ─────────────────────────────────
 function updateConnectionStatus() {
