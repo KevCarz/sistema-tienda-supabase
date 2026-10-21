@@ -495,13 +495,19 @@ async function api(action, data = null, params = {}) {
       body: data ? JSON.stringify(data) : undefined,
     });
 
-    if (!res.ok) {
-      if (res.status === 502 || res.status === 504) throw new Error(' El servidor está despertando.');
-      throw new Error('Error del servidor (Código: ' + res.status + ')');
-    }
-
     const json = await res.json().catch(() => ({ ok: false, error: 'Respuesta inválida' }));
-    if (!json.ok) throw new Error(json.error || 'Error desconocido');
+    if (!res.ok) {
+      if (res.status === 502 || res.status === 504) throw new Error('El servidor está despertando.');
+      // La API ya explica errores de validación; mostrar ese detalle evita ocultarlo tras el código HTTP.
+      throw new Error(
+        json && typeof json.error === 'string'
+          ? json.error
+          : 'Error del servidor (Código: ' + res.status + ')'
+      );
+    }
+    if (!json || typeof json !== 'object' || !json.ok) {
+      throw new Error(json && typeof json.error === 'string' ? json.error : 'Respuesta inválida');
+    }
     
     CSRF = json.csrf || CSRF;
     if (json.resumen) { DB = json; renderSummary(); }
@@ -591,9 +597,10 @@ function renderSummary() {
   // Los datos recibidos de la API se escapan antes de insertarlos como HTML.
   // 2. Alerta de Stock Bajo
   $('#boxBajo').classList.toggle('hidden', r.stock_bajo.length === 0);
+  // PDO puede entregar el stock como cadena; convertirlo permite detectar correctamente el cero.
   $('#listBajo').innerHTML = r.stock_bajo.map(p =>
     `<li class="flex justify-between"><span>${esc(p.nombre)}</span>
-     <b class="${p.stock_actual === 0 ? 'text-red-700' : 'text-amber-600'}">${p.stock_actual} u.</b></li>`
+     <b class="${Number(p.stock_actual) === 0 ? 'text-red-700' : 'text-amber-600'}">${p.stock_actual} u.</b></li>`
   ).join('');
 
   // 3. Últimas Transacciones (Tabla)
@@ -906,8 +913,13 @@ async function viewMovimientos() {
       const totalResultados = r.total_resultados || 0;
 
       // Calcular totales
-      const sumaVentas = rows.filter(m => m.tipo === 'venta').reduce((a, m) => a + m.total, 0);
-      const sumaCompras = rows.filter(m => m.tipo === 'compra').reduce((a, m) => a + m.total, 0);
+      // PDO puede entregar los importes como cadenas; convertirlos evita concatenarlos al sumar.
+      const sumarTotales = movimientos => movimientos.reduce((suma, movimiento) => {
+        const total = Number(movimiento.total);
+        return suma + (Number.isFinite(total) ? total : 0);
+      }, 0);
+      const sumaVentas = sumarTotales(rows.filter(m => m.tipo === 'venta'));
+      const sumaCompras = sumarTotales(rows.filter(m => m.tipo === 'compra'));
 
       // Actualizar resumen
       document.getElementById('movResumen').innerHTML = `
