@@ -378,6 +378,26 @@ const money = n => CURRENCY + Number(n || 0).toFixed(2);
 const inputCls = 'w-full border border-slate-300 rounded-xl px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400';
 const btnCls = 'w-full text-white font-bold text-lg rounded-2xl py-4 active:scale-95 transition disabled:opacity-50';
 
+// Helper para convertir fechas de PostgreSQL a formato legible en Bolivia
+function fechaBolivia(fechaPg) {
+  if (!fechaPg) return '';
+  // Normalizar formato PostgreSQL a ISO 8601 para que JavaScript lo entienda
+  // De: "2026-10-22 00:06:52.510492+00"
+  // A:  "2026-10-22T00:06:52.510492+00:00"
+  const iso = fechaPg.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00');
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return fechaPg; // Si falla, devolver la original
+  
+  return d.toLocaleString('es-BO', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+}
+
 function setTheme(isDark, persist = false) {
   darkModeEnabled = isDark;
   document.documentElement.classList.toggle('dark-mode', isDark);
@@ -616,7 +636,7 @@ function renderSummary() {
         <div class="font-medium text-slate-800">${esc(t.producto)}</div>
         <div class="text-xs text-slate-400">Cant: ${t.cantidad}</div>
       </td>
-      <td class="px-4 py-3 whitespace-nowrap text-slate-500 text-xs">${esc(t.fecha_hora)}</td>
+      <td class="px-4 py-3 whitespace-nowrap text-slate-500 text-xs">${fechaBolivia(t.fecha_hora)}</td>
       <td class="px-4 py-3 whitespace-nowrap text-right font-bold ${t.tipo === 'venta' ? 'text-emerald-600' : 'text-amber-600'}">
         ${t.tipo === 'venta' ? '+' : '−'}${money(t.total)}
       </td>
@@ -871,15 +891,9 @@ async function viewMovimientos() {
     const quien = venta
       ? '👤 ' + esc(m.cliente || 'Público General') + (m.proveedor ? ' · 🚚 ' + esc(m.proveedor) : '')
       : '🚚 ' + esc(m.proveedor || 'Sin proveedor');
+
       // Convertir fecha UTC a hora de Bolivia automáticamente
-  const fechaFormateada = new Date(m.fecha_hora).toLocaleString('es-BO', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true
-  });
+    const fechaFormateada = fechaBolivia(m.fecha_hora);
   
   return '<tr class="hover:bg-slate-50/50">' +
       '<td class="px-3 py-3 whitespace-nowrap text-slate-500 text-xs">' + fechaFormateada + '</td>' +
