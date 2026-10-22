@@ -143,8 +143,15 @@ try {
 
         case 'add_cliente':
             $nombre = requiredText($data, 'nombre', 'El nombre');
+            
+            // VALIDACIÓN EXTRA: El nombre debe contener solo letras, espacios y acentos (mínimo 3 caracteres)
+            if (!preg_match('/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{3,}$/', $nombre)) {
+                throw new InvalidArgumentException('El nombre solo debe contener letras y tener al menos 3 caracteres.');
+            }
+
             $telefono = optionalText($data, 'telefono', 'El teléfono');
             $email = optionalText($data, 'email', 'El email');
+            
             if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
                 throw new InvalidArgumentException('El email no tiene un formato válido.');
             }

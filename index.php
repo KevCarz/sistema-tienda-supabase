@@ -842,7 +842,9 @@ function viewClientes() {
     '<details class="mb-3 bg-indigo-50 rounded-2xl p-3 border border-indigo-100" ' + (DB.clientes.length ? '' : 'open') + '>' +
       '<summary class="font-semibold text-indigo-700 cursor-pointer">＋ Nuevo cliente</summary>' +
       '<form id="f" class="mt-2">' +
-        label('Nombre') + '<input name="nombre" required class="' + inputCls + '">' +
+        // Dentro de viewClientes(), en el formulario:
+        label('Nombre') + 
+        '<input name="nombre" required pattern="^[a-zA-ZáéíóúÁÉÍÓÚñÑ\\s]{3,}$" title="El nombre solo debe contener letras y tener al menos 3 caracteres" class="' + inputCls + '">' +
         label('Teléfono') + '<input name="telefono" type="tel" class="' + inputCls + '">' +
         label('Email') + '<input name="email" type="email" class="' + inputCls + '">' +
         '<button type="submit" class="' + btnCls + ' bg-indigo-600 hover:bg-indigo-700 mt-4">Guardar cliente</button>' +
