@@ -369,6 +369,7 @@ if (darkModeEnabled) document.documentElement.classList.add('dark-mode');
 
 <script>
 const CURRENCY = '<?php echo addslashes(CURRENCY); ?>';
+const BOLIVIA_TIME_ZONE = 'America/La_Paz';
 let CSRF = '<?php echo addslashes($_SESSION['csrf'] ?? ''); ?>';
 let DB = { clientes: [], proveedores: [], productos: [], resumen: null };
 
@@ -378,17 +379,21 @@ const money = n => CURRENCY + Number(n || 0).toFixed(2);
 const inputCls = 'w-full border border-slate-300 rounded-xl px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400';
 const btnCls = 'w-full text-white font-bold text-lg rounded-2xl py-4 active:scale-95 transition disabled:opacity-50';
 
-// Helper para convertir fechas de PostgreSQL a formato legible en Bolivia
+// Convierte fechas de PostgreSQL y fija Bolivia para no depender de la zona del dispositivo.
 function fechaBolivia(fechaPg) {
   if (!fechaPg) return '';
-  // Normalizar formato PostgreSQL a ISO 8601 para que JavaScript lo entienda
-  // De: "2026-10-22 00:06:52.510492+00"
-  // A:  "2026-10-22T00:06:52.510492+00:00"
-  const iso = fechaPg.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00');
+  // PostgreSQL puede enviar el offset como +00 o +0000; JavaScript requiere un ISO completo.
+  let iso = String(fechaPg).trim().replace(' ', 'T');
+  if (iso.includes('T')) {
+    iso = iso.replace(/([+-]\d{2})(\d{2})$/, '$1:$2').replace(/([+-]\d{2})$/, '$1:00');
+  }
+  // Si el valor no incluye zona horaria, se interpreta como UTC para mantener la conversión consistente.
+  if (!/(?:Z|[+-]\d{2}:\d{2})$/i.test(iso)) iso += 'Z';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return fechaPg; // Si falla, devolver la original
   
   return d.toLocaleString('es-BO', {
+    timeZone: BOLIVIA_TIME_ZONE,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -424,7 +429,12 @@ function toast(msg, ok = true) {
 }
 
 function tickClock() {
-  $('#reloj').textContent = new Date().toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' });
+  // El reloj también debe mostrar la hora boliviana aunque el usuario esté en otro país.
+  $('#reloj').textContent = new Date().toLocaleString('es-BO', {
+    timeZone: BOLIVIA_TIME_ZONE,
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  });
 }
 tickClock(); setInterval(tickClock, 30000);
 
