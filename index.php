@@ -674,7 +674,7 @@ function renderSummary() {
   
   $('#chartSemana').innerHTML = semana.length ? semana.map(d => {
     const heightPercent = (parseFloat(d.total_dia) / maxVal) * 100;
-    const fechaCorta = d.dia ? fechaBolivia(d.dia).split(',')[0].trim() : '';
+    const fechaCorta = d.dia ? fechaBolivia(d.dia).split('/')[0] + '/' + fechaBolivia(d.dia).split('/')[1] : '';
     return `
       <div class="flex-1 flex flex-col items-center justify-end h-full group relative">
         <div class="absolute -top-8 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap z-10">
