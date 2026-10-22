@@ -1,0 +1,7 @@
+{
+    "require": {
+        "php": ">=8.3.0"
+    },
+    "description": "Sistema de Tienda - Proyecto Final UPDS",
+    "type": "project"
+}
