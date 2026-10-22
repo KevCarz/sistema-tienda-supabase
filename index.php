@@ -871,17 +871,27 @@ async function viewMovimientos() {
     const quien = venta
       ? '👤 ' + esc(m.cliente || 'Público General') + (m.proveedor ? ' · 🚚 ' + esc(m.proveedor) : '')
       : '🚚 ' + esc(m.proveedor || 'Sin proveedor');
-    return '<tr class="hover:bg-slate-50/50">' +
-        '<td class="px-3 py-3 whitespace-nowrap text-slate-500 text-xs">' + esc(m.fecha_hora) + '</td>' +
-        '<td class="px-3 py-3 whitespace-nowrap">' +
-          '<span class="font-semibold ' + (venta ? 'text-emerald-600' : 'text-amber-600') + '">' + (venta ? 'Venta' : 'Compra') + '</span>' +
-          '<div class="text-xs text-slate-500">' + esc(m.producto) + ' × ' + m.cantidad + '</div>' +
-        '</td>' +
-        '<td class="px-3 py-3 text-slate-700 text-xs">' + quien + '</td>' +
-        '<td class="px-3 py-3 whitespace-nowrap font-bold ' + (venta ? 'text-emerald-600' : 'text-amber-600') + '">' + (venta ? '+' : '−') + money(m.total) + '</td>' +
-        '<td class="px-3 py-3"><span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700 font-medium">Registrado</span></td>' +
-      '</tr>';
-  };
+      // Convertir fecha UTC a hora de Bolivia automáticamente
+  const fechaFormateada = new Date(m.fecha_hora).toLocaleString('es-BO', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+  
+  return '<tr class="hover:bg-slate-50/50">' +
+      '<td class="px-3 py-3 whitespace-nowrap text-slate-500 text-xs">' + fechaFormateada + '</td>' +
+      '<td class="px-3 py-3 whitespace-nowrap">' +
+        '<span class="font-semibold ' + (venta ? 'text-emerald-600' : 'text-amber-600') + '">' + (venta ? 'Venta' : 'Compra') + '</span>' +
+        '<div class="text-xs text-slate-500">' + esc(m.producto) + ' × ' + m.cantidad + '</div>' +
+      '</td>' +
+      '<td class="px-3 py-3 text-slate-700 text-xs">' + quien + '</td>' +
+      '<td class="px-3 py-3 whitespace-nowrap font-bold ' + (venta ? 'text-emerald-600' : 'text-amber-600') + '">' + (venta ? '+' : '−') + money(m.total) + '</td>' +
+      '<td class="px-3 py-3"><span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700 font-medium">Registrado</span></td>' +
+    '</tr>';
+};
 
   // Función que llama al backend con los filtros y dibuja la tabla
   const draw = async () => {
