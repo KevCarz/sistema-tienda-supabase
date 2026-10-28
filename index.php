@@ -701,7 +701,7 @@ $('#chartSemana').innerHTML = `
         </div>`;
     }).join('') : '<div class="w-full text-center text-slate-400 text-xs py-4">Sin datos esta semana</div>'}
   </div>
-`;
+`};
 
 function openSheet(title, html) {
   if ($('#overlay').classList.contains('hidden')) {
@@ -827,7 +827,7 @@ function viewProductos() {
       '<div class="min-w-0"><div class="font-medium truncate">' + esc(p.nombre) + '</div>' +
       '<div class="text-xs text-slate-500 truncate">' + esc(p.descripcion) + '</div></div>' +
       '<div class="text-right shrink-0"><div class="font-semibold">' + money(p.precio_venta) + '</div>' +
-      '<div class="text-xs ' + (p.stock_actual <= (DB.resumen?.limite_stock ?? 5) ? 'text-red-600 font-bold' : 'text-slate-500') + '">stock ' + p.stock_actual + '</div></div>' +
+      '<div class="text-xs ' + (p.stock_actual <= DB.resumen.limite_stock ? 'text-red-600 font-bold' : 'text-slate-500') + '">stock ' + p.stock_actual + '</div></div>' +
     '</li>').join('') || '<li class="py-3 text-slate-400">Sin productos.</li>';
   
   openSheet('Catálogo de Productos', 
