@@ -668,7 +668,7 @@ function renderSummary() {
     </li>
   `).join('') : '<li class="text-slate-400 text-center py-2">Aún no hay ventas registradas.</li>';
 
-  // 5. Renderizar Gráfico de Barras (NUEVO)
+
  // 5. Renderizar Gráfico de Barras con Meta y Responsivo
 const semana = DB.ventas_semana || [];
 const META_SEMANAL = 500; // Meta en Bs. (ajústala según tu negocio)
@@ -827,7 +827,7 @@ function viewProductos() {
       '<div class="min-w-0"><div class="font-medium truncate">' + esc(p.nombre) + '</div>' +
       '<div class="text-xs text-slate-500 truncate">' + esc(p.descripcion) + '</div></div>' +
       '<div class="text-right shrink-0"><div class="font-semibold">' + money(p.precio_venta) + '</div>' +
-      '<div class="text-xs ' + (p.stock_actual <= DB.resumen.limite_stock ? 'text-red-600 font-bold' : 'text-slate-500') + '">stock ' + p.stock_actual + '</div></div>' +
+      '<div class="text-xs ' + (p.stock_actual <= (DB.resumen?.limite_stock ?? 5) ? 'text-red-600 font-bold' : 'text-slate-500') + '">stock ' + p.stock_actual + '</div></div>' +
     '</li>').join('') || '<li class="py-3 text-slate-400">Sin productos.</li>';
   
   openSheet('Catálogo de Productos', 
