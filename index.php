@@ -669,22 +669,39 @@ function renderSummary() {
   `).join('') : '<li class="text-slate-400 text-center py-2">Aún no hay ventas registradas.</li>';
 
   // 5. Renderizar Gráfico de Barras (NUEVO)
-  const semana = DB.ventas_semana || [];
-  const maxVal = Math.max(...semana.map(d => parseFloat(d.total_dia) || 0), 1); // Evitar división por cero
-  
-  $('#chartSemana').innerHTML = semana.length ? semana.map(d => {
-    const heightPercent = (parseFloat(d.total_dia) / maxVal) * 100;
-    const fechaCorta = d.dia ? fechaBolivia(d.dia).split('/')[0] + '/' + fechaBolivia(d.dia).split('/')[1] : '';
-    return `
-      <div class="flex-1 flex flex-col items-center justify-end h-full group relative">
-        <div class="absolute -top-8 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap z-10">
-          ${money(d.total_dia)}
-        </div>
-        <div class="w-full bg-gradient-to-t from-indigo-600 to-indigo-400 rounded-t-md transition-all duration-500 hover:from-indigo-700 hover:to-indigo-500" style="height: ${heightPercent}%"></div>
-        <div class="text-[10px] text-slate-400 mt-1 font-mono">${fechaCorta}</div>
-      </div>`;
-  }).join('') : '<div class="w-full text-center text-slate-400 text-xs py-4">Sin datos esta semana</div>';
-}
+ // 5. Renderizar Gráfico de Barras con Meta y Responsivo
+const semana = DB.ventas_semana || [];
+const META_SEMANAL = 500; // Meta en Bs. (ajústala según tu negocio)
+const maxVal = Math.max(...semana.map(d => parseFloat(d.total_dia) || 0), META_SEMANAL);
+
+$('#chartSemana').innerHTML = `
+  <div class="relative h-48 flex items-end justify-between gap-2 pt-2 pb-6">
+    <!-- Línea de meta -->
+    <div class="absolute left-0 right-0 border-t-2 border-dashed border-amber-400/60 z-10" 
+         style="bottom: ${(META_SEMANAL / maxVal) * 100}%">
+      <span class="absolute -top-5 right-1 text-[10px] font-bold text-amber-500 bg-slate-800 px-1.5 py-0.5 rounded">
+        Meta: Bs. ${META_SEMANAL}
+      </span>
+    </div>
+    
+    ${semana.length ? semana.map(d => {
+      const heightPercent = (parseFloat(d.total_dia) / maxVal) * 100;
+      const fechaCorta = d.dia ? fechaBolivia(d.dia).split(',')[0].trim() : '';
+      const superaMeta = parseFloat(d.total_dia) >= META_SEMANAL;
+      return `
+        <div class="flex-1 flex flex-col items-center justify-end h-full group relative min-w-0">
+          <div class="absolute -top-8 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap z-20 pointer-events-none">
+            ${money(d.total_dia)} ${superaMeta ? '🎯' : ''}
+          </div>
+          <div class="w-full rounded-t-md transition-all duration-500 ${superaMeta 
+            ? 'bg-gradient-to-t from-emerald-600 to-emerald-400 hover:from-emerald-700 hover:to-emerald-500' 
+            : 'bg-gradient-to-t from-indigo-600 to-indigo-400 hover:from-indigo-700 hover:to-indigo-500'}" 
+               style="height: ${heightPercent}%"></div>
+          <div class="text-[10px] text-slate-400 mt-1 font-mono truncate w-full text-center">${fechaCorta}</div>
+        </div>`;
+    }).join('') : '<div class="w-full text-center text-slate-400 text-xs py-4">Sin datos esta semana</div>'}
+  </div>
+`;
 
 function openSheet(title, html) {
   if ($('#overlay').classList.contains('hidden')) {
@@ -943,7 +960,7 @@ async function viewMovimientos() {
       });
 
       // Calcular sumas de lo que se muestra
-      const suma = t => datos.filter(m => m.tipo === t).reduce((a, m) => a + m.total, 0);
+      const suma = t => datos.filter(m => m.tipo === t).reduce((a, m) => a + parseFloat(m.total || 0), 0);
 
       if ($('movResumen')) {
         $('movResumen').innerHTML = 
